@@ -1,121 +1,367 @@
+import 'dart:convert';
+import 'dart:io' show File;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+// --- CAMBIA TU IP AQUÍ ---
+const String URL = kIsWeb
+    ? 'http://127.0.0.1:8000'
+    : 'http://192.168.1.XX:8000';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+void main() => runApp(const AppLogiTrack());
 
-  // This widget is the root of your application.
+class AppLogiTrack extends StatelessWidget {
+  const AppLogiTrack({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'LogiTrack',
+      // TEMA: Morado (DeepPurple) y fondo gris muy claro
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.deepPurple,
+        scaffoldBackgroundColor: const Color(0xFFF5F5F5), // Gris muy clarito
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.deepPurple,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const Login(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class Login extends StatefulWidget {
+  const Login({super.key});
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<Login> createState() => _LoginState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _LoginState extends State<Login> {
+  final _usr = TextEditingController();
+  final _pwd = TextEditingController();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  Future<void> _entrar() async {
+    try {
+      final res = await http.post(
+        Uri.parse('$URL/autenticar'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"usuario": _usr.text, "clave": _pwd.text}),
+      );
+      if (res.statusCode == 200) {
+        final d = jsonDecode(res.body);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => Menu(id: d['id'], nom: d['nombre']),
+          ),
+        );
+      } else {
+        _aviso("Usuario no encontrado");
+      }
+    } catch (e) {
+      _aviso("Sin conexión");
+    }
+  }
+
+  void _aviso(String t) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t)));
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              // Logo simple
+              const Icon(Icons.alt_route, size: 80, color: Colors.deepPurple),
+              const SizedBox(height: 10),
+              const Text(
+                "Acceso Conductores",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.deepPurple,
+                ),
+              ),
+              const SizedBox(height: 30),
+
+              // DIFERENCIA CLAVE: Tarjeta contenedora (Card)
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _usr,
+                        decoration: const InputDecoration(
+                          labelText: "Usuario",
+                          icon: Icon(Icons.person),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      TextField(
+                        controller: _pwd,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: "Contraseña",
+                          icon: Icon(Icons.vpn_key),
+                        ),
+                      ),
+                      const SizedBox(height: 25),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 45,
+                        child: ElevatedButton(
+                          onPressed: _entrar,
+                          child: const Text("INGRESAR"),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class Menu extends StatefulWidget {
+  final int id;
+  final String nom;
+  const Menu({super.key, required this.id, required this.nom});
+  @override
+  State<Menu> createState() => _MenuState();
+}
+
+class _MenuState extends State<Menu> {
+  List _data = [];
+  @override
+  void initState() {
+    super.initState();
+    _get();
+  }
+
+  Future<void> _get() async {
+    final r = await http.get(Uri.parse('$URL/mi-ruta/${widget.id}'));
+    if (r.statusCode == 200) setState(() => _data = jsonDecode(r.body));
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      appBar: AppBar(title: const Text("Mis Envíos")),
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(15),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "Bienvenido, ${widget.nom}",
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _data.length,
+              itemBuilder: (c, i) => Card(
+                margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    // DIFERENCIA: Icono circular
+                    backgroundColor: Colors.deepPurple,
+                    child: Icon(
+                      Icons.local_shipping,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    _data[i]['direccion_destino'],
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text("ID: ${_data[i]['id']}"),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => Detalle(d: _data[i])),
+                  ).then((_) => _get()),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+    );
+  }
+}
+
+class Detalle extends StatefulWidget {
+  final dynamic d;
+  const Detalle({super.key, required this.d});
+  @override
+  State<Detalle> createState() => _DetalleState();
+}
+
+class _DetalleState extends State<Detalle> {
+  Uint8List? _imgBytes;
+  String? _pathMovil;
+  String? _gps;
+  bool _load = false;
+
+  Future<void> _mapa() async => launchUrl(
+    Uri.parse(
+      "http://maps.google.com/?q=${widget.d['latitud']},${widget.d['longitud']}",
+    ),
+    mode: LaunchMode.externalApplication,
+  );
+
+  Future<void> _fotoGPS() async {
+    try {
+      Position p = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() => _gps = "${p.latitude}, ${p.longitude}");
+    } catch (e) {
+      setState(() => _gps = "No GPS");
+    }
+
+    final xfile = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 40,
+    );
+    if (xfile != null) {
+      final bytes = await xfile.readAsBytes();
+      setState(() {
+        _imgBytes = bytes;
+        _pathMovil = xfile.path;
+      });
+    }
+  }
+
+  Future<void> _fin() async {
+    if (_imgBytes == null || _gps == null) return;
+    setState(() => _load = true);
+    var req = http.MultipartRequest('POST', Uri.parse('$URL/terminar'));
+    req.fields['id_envio'] = widget.d['id'].toString();
+    req.fields['gps'] = _gps!;
+
+    if (kIsWeb) {
+      req.files.add(
+        http.MultipartFile.fromBytes('foto', _imgBytes!, filename: 'web.jpg'),
+      );
+    } else {
+      req.files.add(await http.MultipartFile.fromPath('foto', _pathMovil!));
+    }
+
+    if ((await req.send()).statusCode == 200) Navigator.pop(context);
+    setState(() => _load = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Detalle de Entrega")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
           children: [
-            const Text('You have pushed the button this many times:'),
+            const Icon(Icons.location_on, size: 40, color: Colors.deepPurple),
+            const SizedBox(height: 10),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              widget.d['direccion_destino'],
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 20),
+
+            OutlinedButton(onPressed: _mapa, child: const Text("Ver en Mapa")),
+            const SizedBox(height: 20),
+
+            Container(
+              height: 250,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(10),
+                color: Colors.white,
+              ),
+              child: _imgBytes == null
+                  ? const Center(
+                      child: Text(
+                        "Sin evidencia",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(_imgBytes!, fit: BoxFit.cover),
+                    ),
+            ),
+            const SizedBox(height: 10),
+            if (_gps != null)
+              Text(
+                "GPS Capturado: $_gps",
+                style: const TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            const SizedBox(height: 20),
+
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _fotoGPS,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[800],
+                    ),
+                    child: const Text("CÁMARA"),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: (_imgBytes != null && !_load) ? _fin : null,
+                    child: _load
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("ENVIAR"),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }

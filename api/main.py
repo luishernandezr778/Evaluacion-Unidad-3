@@ -8,7 +8,7 @@ from datetime import datetime
 
 app = FastAPI(title="API LogiTrack")
 
-# Permisos para que no falle en Chrome/Móvil
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuración de Conexión
 CONFIG_BD = {
     'host': 'localhost',
     'user': 'root',
@@ -28,7 +27,6 @@ class ModeloLogin(BaseModel):
     usuario: str
     clave: str
 
-# 1. Login (Autenticación)
 @app.post("/autenticar")
 def login_conductor(datos: ModeloLogin):
     conn = mysql.connector.connect(**CONFIG_BD)
@@ -47,25 +45,21 @@ def login_conductor(datos: ModeloLogin):
     else:
         raise HTTPException(status_code=401, detail="Usuario no valido")
 
-# 2. Obtener Ruta
 @app.get("/mi-ruta/{id_conductor}")
 def obtener_ruta(id_conductor: int):
     conn = mysql.connector.connect(**CONFIG_BD)
     cursor = conn.cursor(dictionary=True)
-    # Buscamos solo los 'activo'
     cursor.execute("SELECT * FROM envios WHERE conductor_id = %s AND estatus = 'activo'", (id_conductor,))
     lista = cursor.fetchall()
     conn.close()
     return lista
 
-# 3. Finalizar Entrega
 @app.post("/terminar")
 async def terminar_envio(
     id_envio: int = Form(...),
     gps: str = Form(...),
     foto: UploadFile = File(...)
 ):
-    # Guardar archivo con nombre único
     nombre_archivo = f"evidencia_{id_envio}_{int(datetime.now().timestamp())}.jpg"
     carpeta = "evidencias"
     os.makedirs(carpeta, exist_ok=True)
@@ -73,8 +67,7 @@ async def terminar_envio(
     
     with open(ruta_completa, "wb") as buffer:
         buffer.write(await foto.read())
-    
-    # Actualizar BD
+        
     conn = mysql.connector.connect(**CONFIG_BD)
     cursor = conn.cursor()
     sql = """
